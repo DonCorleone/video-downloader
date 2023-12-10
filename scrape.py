@@ -3,21 +3,16 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import re
 
-import configparser
-
-# Read the configuration file
-config = configparser.ConfigParser()
-config.read('config.ini')
+import os
+os.environ.get('KEY')
 
 # Get the URL
-url = config['DEFAULT']['Url']
+url = os.environ.get('URL')
 
 # Use the URL
 k = requests.get(url).text
 
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36'}
-
-k = requests.get('https://naturmuseum.lu.ch/Veranstaltungen/Veranstaltungskalender').text
 soup=BeautifulSoup(k,'html.parser')
 # Find all div tags with class gridrow
 gridrows = soup.find_all('div', class_='gridrow')
