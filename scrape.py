@@ -34,8 +34,8 @@ found_event = False
 
 # Store the data in a database
 client = MongoClient(os.environ.get('DB_URL'))
-db = client['puppet_theater']
-collection = db['events']
+db = client['eventDb']
+collection = db['EventDetails']
 
 # For each gridrow
 for gridrow in gridrows:
@@ -58,37 +58,34 @@ for gridrow in gridrows:
             # Find the seats information
             seats_text = seats_div.text.strip()
             if seats_text == 'Ausgebucht':
-                seats = 0
+                seats_text = '0'
             else:
                 # Find all digits in the string
-                seats = int(''.join(re.findall(r'\d', seats_text)))
+                seats_text = int(''.join(re.findall(r'\d', seats_text))).__str__()
 
             current_date = current_date + ' ' + event_time.text.strip()
             # Parse the date and time string
             current_date = dateparser.parse(current_date)
 
             # Create a datetime object with the date and time you want to search for
-            search_date = datetime(current_date.year, current_date.month, current_date.day, current_date.hour, current_date.minute)
+            search_datestart = datetime(current_date.year, current_date.month, current_date.day, current_date.hour-4, current_date.minute)
+            search_dateend = datetime(current_date.year, current_date.month, current_date.day, current_date.hour+4, current_date.minute)
 
             # Store the data in the database
             # Use the datetime object to find a record
-            record = collection.find_one({'date': search_date})
+            record = collection.find_one({'start': {'$lt': search_dateend, '$gte': search_datestart}})
             if record is not None:
                 # The event is already in the database
                 # Check if the seats information is different
-                if collection.find_one({'date': search_date, 'seats': seats}):
+                if collection.find_one({'start': {'$lt': search_dateend, '$gte': search_datestart}, 'saleState': seats_text}):
                     # The seats information is the same, do nothing
                     # print the date in the same format as the database
-                    print ('Event unchanged: ' + search_date.strftime('%Y-%m-%d %H:%M'))
+                    print ('Event unchanged: ' + search_datestart.strftime('%Y-%m-%d %H:%M'))
                     pass
                 else:
                     # The seats information is different, update the database
-                    result = collection.update_one({'date': search_date}, {'$set': {'seats': seats}})
-                    print('Updated event: ' + search_date.strftime('%Y-%m-%d %H:%M'))
+                    result = collection.update_one({'start': {'$lt': search_dateend, '$gte': search_datestart}}, {'$set': {'saleState': seats_text}})                    
+                    print('Updated event: ' + search_datestart.strftime('%Y-%m-%d %H:%M'))
             else:
-                if (os.environ.get('INSERT') == 'true'):
-                    if collection.insert_one({'date': search_date, 'seats': seats}):
-                        print('Inserted event: ' + search_date.strftime('%Y-%m-%d %H:%M'))
-                else:
-                    print('Event not found: ' + search_date.strftime('%Y-%m-%d %H:%M'))
+                print('Event not found: ' + search_datestart.strftime('%Y-%m-%d %H:%M'))
                 pass
