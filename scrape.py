@@ -7,6 +7,17 @@ from pymongo import MongoClient
 import dateparser
 from datetime import datetime
 
+def get_external_ip():
+    response = requests.get("https://api.ipify.org?format=json")
+    if response.status_code == 200:
+        data = response.json()
+        return data.get("ip")
+    else:
+        return "Unknown"
+
+external_ip = get_external_ip()
+print("External IP:", external_ip)
+
 # Get the URL
 url = os.environ.get('URL')
 
