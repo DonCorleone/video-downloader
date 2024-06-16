@@ -1,11 +1,13 @@
 import requests
+import time
 from bs4 import BeautifulSoup
 import pandas as pd
 import re
 import os
-from pymongo import MongoClient
 import dateparser
 from datetime import datetime
+from selenium import webdriver
+from dotenv import load_dotenv
 
 def get_external_ip():
     response = requests.get("https://api.ipify.org?format=json")
@@ -18,74 +20,138 @@ def get_external_ip():
 external_ip = get_external_ip()
 print("External IP:", external_ip)
 
-# Get the URL
-url = os.environ.get('URL')
+# Get the URL from user input
+url = input('Enter the URL: ')
 
-# Use the URL
-k = requests.get(url).text
+# get the label from user input
+label = input('Enter the label: ')
+
+# get the category from user input
+category = input('Enter the category: ')
+
+load_dotenv()
+
+# get the cookies from .env file
+cookieOneKey = os.getenv('COOKIE_ONE_KEY')
+cookieOneValue = os.getenv('COOKIE_ONE_VALUE')
+cookieTwoKey = os.getenv('COOKIE_TWO_KEY')
+cookieTwoValue = os.getenv('COOKIE_TWO_VALUE')
+time.sleep(2)
+
+cookies = {
+    cookieOneKey: cookieOneValue,
+    cookieTwoKey: cookieTwoValue
+}
+
+
+# Initialize the WebDriver (replace 'path_to_webdriver' with the actual path)
+driver = webdriver.Firefox()
+
+# Open the URL
+driver.get(url)
+
+# Add cookies
+for name, value in cookies.items():
+    driver.add_cookie({'name': name, 'value': value})
+
+# Refresh the page to apply the cookies
+driver.refresh()
+# Wait for 5 seconds
+time.sleep(2)
+# Get the page source
+html = driver.page_source
+
+# Parse the response with BeautifulSoup
+soup = BeautifulSoup(html, 'html.parser')
 
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36'}
-soup=BeautifulSoup(k,'html.parser')
-# Find all div tags with class gridrow
-gridrows = soup.find_all('div', class_='gridrow')
 
-current_date = None
-found_event = False
+videos = soup.find_all(id=os.getenv('ID_VIDEOS'))
 
-# Store the data in a database
-client = MongoClient(os.environ.get('DB_URL'))
-db = client['eventDb']
-collection = db['EventDetails']
+title = soup.find('h2').text
 
-# For each gridrow
-for gridrow in gridrows:
-    # Find the event-datum
-    event_datum = gridrow.find('div', class_='gridcolumn small-12 large-12 event-datum')
+filename = label + '-' + category + ' - ' + title 
 
-    if event_datum is not None:
-        # This is a day row, store the date and time and reset found_event
-        current_date = event_datum.text.strip()
-        found_event = False
-    else:
-        # This is an event row, check if it contains "Figurentheater Petruschka"
-        event = gridrow.find('div', class_='gridcolumn small-10 large-5', string='Figurentheater Petruschka')
-        event_time = gridrow.find('div', class_='gridcolumn small-2 large-1')  # This is the time element
-        seats_div = gridrow.find('div', class_='gridcolumn small-offset-2 small-10 large-offset-0 large-6 gridcolumn-last')
-            
-        if event is not None and event_time is not None and seats_div is not None:
-            # This event is on the current date
-            found_event = True
-            # Find the seats information
-            seats_text = seats_div.text.strip()
-            if seats_text == 'Ausgebucht':
-                seats_text = '0'
-            else:
-                # Find all digits in the string
-                seats_text = int(''.join(re.findall(r'\d', seats_text))).__str__()
+# Find the iframe
+iframe = soup.find('iframe')
 
-            current_date = current_date + ' ' + event_time.text.strip()
-            # Parse the date and time string
-            current_date = dateparser.parse(current_date)
+# Get the source URL of the iframe
+iframe_url = 'https:' + iframe['src']
 
-            # Create a datetime object with the date and time you want to search for
-            search_datestart = datetime(current_date.year, current_date.month, current_date.day, current_date.hour-4, current_date.minute)
-            search_dateend = datetime(current_date.year, current_date.month, current_date.day, current_date.hour+4, current_date.minute)
+# Send a request to the iframe's URL
+# Open the URL
+driver.get(iframe_url)
 
-            # Store the data in the database
-            # Use the datetime object to find a record
-            record = collection.find_one({'start': {'$lt': search_dateend, '$gte': search_datestart}})
-            if record is not None:
-                # The event is already in the database
-                # Check if the seats information is different
-                if collection.find_one({'start': {'$lt': search_dateend, '$gte': search_datestart}, 'saleState': seats_text}):
-                    # The seats information is the same, do nothing
-                    # print the date in the same format as the database
-                    print ('Event unchanged: ' + search_datestart.strftime('%Y-%m-%d %H:%M'))
-                    pass
-                else:
-                    # The seats information is different, update the database
-                    result = collection.update_one({'start': {'$lt': search_dateend, '$gte': search_datestart}}, {'$set': {'saleState': seats_text}})                    
-                    print('Updated event: ' + search_datestart.strftime('%Y-%m-%d %H:%M'))
-            else:
-                print('Event not found: ' + search_datestart.strftime('%Y-%m-%d %H:%M'))
-                pass
+# Add cookies
+for name, value in cookies.items():
+    driver.add_cookie({'name': name, 'value': value})
+
+# Refresh the page to apply the cookies
+driver.refresh()
+# Wait for 5 seconds
+time.sleep(2)
+
+html = driver.page_source
+# Parse the response with BeautifulSoup
+iframe_soup = BeautifulSoup(html, 'html.parser')
+
+videowrapper =  iframe_soup.find(id=os.getenv('ID_VIDEO_WRAPPER'))
+
+# loop through the contents of the videowrapper
+for content in videowrapper.contents:
+    # check if the content is a video tag
+    if content.name == 'video':
+        # get the video tag
+        video = content
+        break
+
+poster_src = 'https:' + video['poster']
+
+biggest_source = ''
+biggest_width = 0
+# loop through the contents of the video
+for source in video.contents:
+    # check if the content is a source tag
+    if source.name == 'source':
+        # get the source tag
+        source_url = source['src']
+        # remove '/?embed=true' from the source URL
+        source_url = source_url.replace('/?embed=true', '')
+        if biggest_source == '':
+            biggest_source = source_url
+
+        # get the width of the video (marked as _xy.mp4 in the videosource)
+        width = re.search(r'(\d+)p.mp4', source_url)
+        if width:
+            width = int(width.group(1))
+            if width > biggest_width:
+                biggest_width = width
+                biggest_source = source['src']
+        # if there is 'mp4' in the source URL and the biggestwidth is less than 720, the source URL is the biggest source
+        if 'mp4' in source_url and biggest_width < 720:
+            biggest_source = source['src']
+
+#download the poster
+response = requests.get(poster_src, headers=headers)
+
+with open(filename + '.jpg', 'wb') as f:
+    f.write(response.content)
+
+#download the video
+response = requests.get(biggest_source, headers=headers)
+
+with open(filename + '.mp4', 'wb') as f:
+    f.write(response.content)
+
+# close the driver
+driver.close()
+
+# execute a command to convert the image to square
+os.system(f'convert "{filename}.jpg" \( +clone -rotate 90 +clone -mosaic +level-colors black \) +swap -gravity center -composite "output/{filename}.jpg"')
+
+# execute a command to convert the video to mp4
+os.system(f'HandbrakeCli -i "{filename}.mp4" --preset "Apple 1080p30 Surround" -o "output/{filename}.mp4"') 
+
+# delete the original image and video
+os.remove(f'{filename}.jpg')
+os.remove(f'{filename}.mp4')
