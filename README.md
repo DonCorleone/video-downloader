@@ -1,2 +1,2 @@
-# petruschka-scraper
+# video downloader
 ## beautiful soup
