@@ -26,8 +26,15 @@ url = input('Enter the URL: ')
 # get the label from user input
 label = input('Enter the label: ')
 
+# if label is empty, set it to 'default'
+if label == '':
+    label = 'Others'
+
 # get the category from user input
 category = input('Enter the category: ')
+
+# get the imageUrl from user input
+imageUrl = input('Enter the imageUrl: ')
 
 load_dotenv()
 
@@ -132,7 +139,10 @@ for source in video.contents:
             biggest_source = source['src']
 
 #download the poster
-response = requests.get(poster_src, headers=headers)
+# if the image URL is empty, set it to the poster source
+if imageUrl == '':
+    imageUrl = poster_src
+response = requests.get(imageUrl, headers=headers)
 
 with open(filename + '.jpg', 'wb') as f:
     f.write(response.content)
