@@ -17,6 +17,10 @@ def get_external_ip():
     else:
         return "Unknown"
 
+def sanitize_filename(filename):
+    # Definiere eine Regex, die alle unerlaubten Zeichen ersetzt
+    return re.sub(r'[\\/:*?"<>|]', '', filename)
+
 external_ip = get_external_ip()
 print("External IP:", external_ip)
 
@@ -77,7 +81,10 @@ videos = soup.find_all(id=os.getenv('ID_VIDEOS'))
 
 title = soup.find('h2').text
 
-filename = label + '-' + category + ' - ' + title 
+# strip illegal characters from filename
+clean_title = sanitize_filename(title)
+
+filename = label + '-' + category + ' - ' + clean_title 
 
 # Find the iframe
 iframe = soup.find('iframe')
